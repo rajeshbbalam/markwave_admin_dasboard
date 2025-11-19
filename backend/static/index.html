@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markwave Admin Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; background: #f9f9f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .section { margin: 1.5rem 0; }
+        a { color: #007bff; text-decoration: none; padding: 0.5rem 1rem; background: #e7f3ff; border-radius: 4px; }
+        a:hover { background: #cce7ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Markwave Admin Dashboard</h1>
+        <div class="section">
+            <p>FastAPI backend is running. Below are quick links:</p>
+            <p><a href="/docs">📘 API Documentation (Swagger UI)</a></p>
+            <p><a href="/health">❤️ Health Check</a></p>
+        </div>
+        <div class="section">
+            <h2>API Endpoints</h2>
+            <ul>
+                <li>POST <code>/Users/</code> — Create or update a user</li>
+                <li>GET <code>/Users/referrals</code> — List new referrals</li>
+                <li>GET <code>/Users/customers</code> — List existing customers</li>
+                <li>POST <code>/users/verify</code> — Verify a user (generate OTP)</li>
+                <li>POST <code>/purchases/</code> — Record a purchase</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

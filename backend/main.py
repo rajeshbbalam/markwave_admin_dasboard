@@ -3,6 +3,8 @@ import random
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from neo4j import GraphDatabase
 from pydantic import BaseModel
 
@@ -18,6 +20,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for frontend
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Markwave Admin Dashboard</title>
+        <style>
+            body { font-family: sans-serif; margin: 2rem; }
+            h1 { color: #333; }
+            a { color: #007bff; text-decoration: none; }
+        </style>
+    </head>
+    <body>
+        <h1>Markwave Admin Dashboard</h1>
+        <p>FastAPI backend is running.</p>
+        <p><a href="/docs">API Documentation (Swagger UI)</a></p>
+        <p><a href="/health">Health Check</a></p>
+    </body>
+    </html>
+    """
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 # Neo4j connection
 URI = os.getenv("NEO4J_URI")
