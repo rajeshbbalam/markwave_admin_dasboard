@@ -132,11 +132,13 @@ async def verify_user(user: UserVerify):
         with driver.session() as session:
             # Check if user exists and is new_referral and not verified
             result = session.run(
-                "MATCH (u:User {mobile: $mobile}) RETURN u.referral_type AS type, u.verified AS verified",
+                "MATCH (u:User {mobile: $mobile}) RETURN u.referral_type AS type, u.verified AS verified, properties(u) AS user_props",
                 mobile=user.mobile
             )
             record = result.single()
-            if record and record["type"] == "new_referral" and not record["verified"]:
+            if record["verified"]:
+                return {"statuscode":200,"status": "success", "message": "User is already verified", "user": record["user_props"]}
+            elif record and record["type"] == "new_referral":
                 # Generate OTP
                 otp = str(random.randint(100000, 999999))
                 # Update with device info and verified
@@ -146,7 +148,7 @@ async def verify_user(user: UserVerify):
                 )
                 return {"statuscode":200,"status": "success", "otp": otp, "message": "User verified and device info stored"}
             else:
-                return {"statuscode":300,"status": "error", "message": "User not found, not a new referral, or already verified"}
+                return {"statuscode":300,"status": "error", "message": "User not found, not a new referral"}
     finally:
         driver.close()
 
