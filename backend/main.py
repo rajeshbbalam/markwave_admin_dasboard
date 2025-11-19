@@ -329,6 +329,46 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
     finally:
         driver.close()
 
+@app.get("/users/referrals")
+async def get_new_referrals():
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User {referral_type: 'new_referral'}) RETURN u.id, u.mobile, u.name, u.verified")
+            Users = [
+                {
+                    "id": record["u.id"],
+                    "mobile": record["u.mobile"],
+                    "name": record["u.name"],
+                    "verified": record["u.verified"],
+                }
+                for record in result
+            ]
+        return Users
+    finally:
+        driver.close()
+
+
+@app.get("/users/customers")
+async def get_existing_customers():
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User {referral_type: 'existing_customer'}) RETURN u.id, u.mobile, u.name, u.verified")
+            Users = [
+                {
+                    "id": record["u.id"],
+                    "mobile": record["u.mobile"],
+                    "name": record["u.name"],
+                    "verified": record["u.verified"],
+                }
+                for record in result
+            ]
+        return Users
+    finally:
+        driver.close()
+
+
 @app.get("/users/{mobile}")
 async def get_user_details(mobile: str):
     driver = get_driver()
@@ -376,44 +416,6 @@ async def get_user_details_by_id(user_id: str):
         driver.close()
 
 
-@app.get("/users/referrals")
-async def get_new_referrals():
-    driver = get_driver()
-    try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'new_referral'}) RETURN u.id, u.mobile, u.name, u.verified")
-            Users = [
-                {
-                    "id": record["u.id"],
-                    "mobile": record["u.mobile"],
-                    "name": record["u.name"],
-                    "verified": record["u.verified"],
-                }
-                for record in result
-            ]
-        return Users
-    finally:
-        driver.close()
-
-
-@app.get("/users/customers")
-async def get_existing_customers():
-    driver = get_driver()
-    try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'existing_customer'}) RETURN u.id, u.mobile, u.name, u.verified")
-            Users = [
-                {
-                    "id": record["u.id"],
-                    "mobile": record["u.mobile"],
-                    "name": record["u.name"],
-                    "verified": record["u.verified"],
-                }
-                for record in result
-            ]
-        return Users
-    finally:
-        driver.close()
 
 @app.post("/users/verify")
 async def verify_user(user: UserVerify):
