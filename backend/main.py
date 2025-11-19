@@ -102,9 +102,9 @@ async def verify_user(user: UserVerify):
                     "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model, u.verified = true",
                     mobile=user.mobile, device_id=user.device_id, device_model=user.device_model
                 )
-                return {"status": "success", "otp": otp, "message": "User verified and device info stored"}
+                return {"statuscode":200,"status": "success", "otp": otp, "message": "User verified and device info stored"}
             else:
-                return {"status": "error", "message": "User not found, not a new referral, or already verified"}
+                return {"statuscode":300,"status": "error", "message": "User not found, not a new referral, or already verified"}
     finally:
         driver.close()
 
