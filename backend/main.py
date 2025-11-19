@@ -123,6 +123,19 @@ async def create_User(User: UserCreate):
     driver = get_driver()
     try:
         with driver.session() as session:
+            # Check if user already exists
+            existing = session.run(
+                "MATCH (u:User {mobile: $mobile}) RETURN u",
+                mobile=User.mobile
+            ).single()
+
+            if existing:
+                existing_props = dict(existing["u"])
+                return {
+                    "message": "User already exists",
+                    "user": existing_props
+                }
+
             # Create or update user, assigning a stable unique id on first creation
             result = session.run(
                 "MERGE (u:User {mobile: $mobile}) "
