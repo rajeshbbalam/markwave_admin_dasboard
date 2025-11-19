@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from neo4j import GraphDatabase
 from pydantic import BaseModel
 
@@ -26,6 +26,11 @@ app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
+    """Serve the main frontend page"""
+    index_path = os.path.join("static", "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r") as f:
+            return f.read()
     return """
     <!DOCTYPE html>
     <html lang="en">
@@ -46,6 +51,11 @@ async def read_root():
     </body>
     </html>
     """
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return a minimal favicon to avoid 404s"""
+    return FileResponse("static/favicon.ico") if os.path.exists("static/favicon.ico") else {"status": "no favicon"}
 
 @app.get("/health")
 async def health_check():
