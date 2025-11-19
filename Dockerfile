@@ -27,5 +27,5 @@ COPY backend/ .
 # Expose port (Cloud Run will set PORT env var)
 EXPOSE 8080
 
-# Use gunicorn for production
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
+# Use uvicorn (ASGI) for FastAPI
+CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
