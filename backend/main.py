@@ -1,14 +1,25 @@
 import os
 import random
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from neo4j import GraphDatabase
 from pydantic import BaseModel
 
-load_dotenv()
+
+# Load environment variables from backend/.env
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+load_dotenv(ENV_PATH)
+
+# Validate Neo4j environment variables
+if not os.getenv("NEO4J_URI"):
+    raise RuntimeError("NEO4J_URI is missing. Ensure backend/.env is correctly configured.")
+if not os.getenv("NEO4J_PASSWORD"):
+    raise RuntimeError("NEO4J_PASSWORD is missing. Ensure backend/.env is correctly configured.")
 
 app = FastAPI()
 
@@ -22,7 +33,9 @@ app.add_middleware(
 )
 
 # Mount static files for frontend
-app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -79,6 +92,21 @@ class UserCreate(BaseModel):
     referral_type: str  # 'new_referral' or 'existing_customer'
     verified: bool = False
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    referral_type: Optional[str] = None
+    verified: Optional[bool] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    occupation: Optional[str] = None
+    income_level: Optional[str] = None
+    family_size: Optional[int] = None
+    custom_fields: Optional[Dict[str, Any]] = None
+
 class UserVerify(BaseModel):
     mobile: str
     device_id: str
@@ -89,38 +117,287 @@ class Purchase(BaseModel):
     item: str  # e.g., 'buffalo'
     details: str
 
-@app.post("/Users/")
+
+@app.post("/users/")
 async def create_User(User: UserCreate):
     driver = get_driver()
     try:
         with driver.session() as session:
-            session.run(
+            # Create or update user, assigning a stable unique id on first creation
+            result = session.run(
                 "MERGE (u:User {mobile: $mobile}) "
-                "SET u.name = $name, u.referral_type = $referral_type, u.verified = $verified",
-                mobile=User.mobile, name=User.name, referral_type=User.referral_type, verified=User.verified
+                "ON CREATE SET u.id = randomUUID() "
+                "SET u.name = $name, u.referral_type = $referral_type, u.verified = $verified "
+                "RETURN u.id AS id, u.mobile AS mobile, u.name AS name, u.referral_type AS referral_type, u.verified AS verified",
+                mobile=User.mobile,
+                name=User.name,
+                referral_type=User.referral_type,
+                verified=User.verified,
             )
-        return {"message": "User created or updated"}
+            record = result.single()
+            return {
+                "message": "User created or updated",
+                "user": {
+                    "id": record["id"],
+                    "mobile": record["mobile"],
+                    "name": record["name"],
+                    "referral_type": record["referral_type"],
+                    "verified": record["verified"],
+                },
+            }
     finally:
         driver.close()
 
-@app.get("/Users/referrals")
+@app.put("/users/{mobile}")
+async def update_user(mobile: str, user_update: UserUpdate):
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            # Check if user exists
+            result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
+            user = result.single()
+            
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Build dynamic SET clause based on provided fields
+            set_clauses = []
+            params = {"mobile": mobile}
+            
+            # Handle standard fields
+            if user_update.name is not None:
+                set_clauses.append("u.name = $name")
+                params["name"] = user_update.name
+            
+            if user_update.referral_type is not None:
+                set_clauses.append("u.referral_type = $referral_type")
+                params["referral_type"] = user_update.referral_type
+            
+            if user_update.verified is not None:
+                set_clauses.append("u.verified = $verified")
+                params["verified"] = user_update.verified
+            
+            # Handle new fields
+            if user_update.email is not None:
+                set_clauses.append("u.email = $email")
+                params["email"] = user_update.email
+            
+            if user_update.address is not None:
+                set_clauses.append("u.address = $address")
+                params["address"] = user_update.address
+            
+            if user_update.phone is not None:
+                set_clauses.append("u.phone = $phone")
+                params["phone"] = user_update.phone
+            
+            if user_update.city is not None:
+                set_clauses.append("u.city = $city")
+                params["city"] = user_update.city
+            
+            if user_update.state is not None:
+                set_clauses.append("u.state = $state")
+                params["state"] = user_update.state
+            
+            if user_update.pincode is not None:
+                set_clauses.append("u.pincode = $pincode")
+                params["pincode"] = user_update.pincode
+            
+            if user_update.occupation is not None:
+                set_clauses.append("u.occupation = $occupation")
+                params["occupation"] = user_update.occupation
+            
+            if user_update.income_level is not None:
+                set_clauses.append("u.income_level = $income_level")
+                params["income_level"] = user_update.income_level
+            
+            if user_update.family_size is not None:
+                set_clauses.append("u.family_size = $family_size")
+                params["family_size"] = user_update.family_size
+            
+            # Handle custom dynamic fields
+            if user_update.custom_fields:
+                for key, value in user_update.custom_fields.items():
+                    # Sanitize key name for Neo4j
+                    safe_key = key.replace(" ", "_").replace("-", "_")
+                    set_clauses.append(f"u.{safe_key} = ${safe_key}")
+                    params[safe_key] = value
+            
+            if set_clauses:
+                query = f"MATCH (u:User {{mobile: $mobile}}) SET {', '.join(set_clauses)} RETURN u"
+                result = session.run(query, **params)
+                updated = result.single()["u"] if result.single() else None
+                updated_data = dict(updated) if updated is not None else None
+            else:
+                updated_data = None
+
+            return {"message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
+    finally:
+        driver.close()
+
+
+@app.put("/users/id/{user_id}")
+async def update_user_by_id(user_id: str, user_update: UserUpdate):
+    """Update user using generated unique id instead of mobile."""
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+            user = result.single()
+
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            set_clauses = []
+            params = {"id": user_id}
+
+            if user_update.name is not None:
+                set_clauses.append("u.name = $name")
+                params["name"] = user_update.name
+
+            if user_update.referral_type is not None:
+                set_clauses.append("u.referral_type = $referral_type")
+                params["referral_type"] = user_update.referral_type
+
+            if user_update.verified is not None:
+                set_clauses.append("u.verified = $verified")
+                params["verified"] = user_update.verified
+
+            if user_update.email is not None:
+                set_clauses.append("u.email = $email")
+                params["email"] = user_update.email
+
+            if user_update.address is not None:
+                set_clauses.append("u.address = $address")
+                params["address"] = user_update.address
+
+            if user_update.phone is not None:
+                set_clauses.append("u.phone = $phone")
+                params["phone"] = user_update.phone
+
+            if user_update.city is not None:
+                set_clauses.append("u.city = $city")
+                params["city"] = user_update.city
+
+            if user_update.state is not None:
+                set_clauses.append("u.state = $state")
+                params["state"] = user_update.state
+
+            if user_update.pincode is not None:
+                set_clauses.append("u.pincode = $pincode")
+                params["pincode"] = user_update.pincode
+
+            if user_update.occupation is not None:
+                set_clauses.append("u.occupation = $occupation")
+                params["occupation"] = user_update.occupation
+
+            if user_update.income_level is not None:
+                set_clauses.append("u.income_level = $income_level")
+                params["income_level"] = user_update.income_level
+
+            if user_update.family_size is not None:
+                set_clauses.append("u.family_size = $family_size")
+                params["family_size"] = user_update.family_size
+
+            if user_update.custom_fields:
+                for key, value in user_update.custom_fields.items():
+                    safe_key = key.replace(" ", "_").replace("-", "_")
+                    set_clauses.append(f"u.{safe_key} = ${safe_key}")
+                    params[safe_key] = value
+
+            if set_clauses:
+                query = f"MATCH (u:User {{id: $id}}) SET {', '.join(set_clauses)} RETURN u"
+                result = session.run(query, **params)
+                updated = result.single()["u"] if result.single() else None
+                updated_data = dict(updated) if updated is not None else None
+            else:
+                updated_data = None
+
+            return {"message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
+    finally:
+        driver.close()
+
+@app.get("/users/{mobile}")
+async def get_user_details(mobile: str):
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
+            user_record = result.single()
+            
+            if not user_record:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            user_node = user_record["u"]
+            user_data = dict(user_node)
+            
+            return user_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        driver.close()
+
+
+@app.get("/users/id/{user_id}")
+async def get_user_details_by_id(user_id: str):
+    """Fetch full user details using generated unique id instead of mobile."""
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+            user_record = result.single()
+
+            if not user_record:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            user_node = user_record["u"]
+            user_data = dict(user_node)
+
+            return user_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        driver.close()
+
+
+@app.get("/users/referrals")
 async def get_new_referrals():
     driver = get_driver()
     try:
         with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'new_referral'}) RETURN u.mobile, u.name, u.verified")
-            Users = [{"mobile": record["u.mobile"], "name": record["u.name"], "verified": record["u.verified"]} for record in result]
+            result = session.run("MATCH (u:User {referral_type: 'new_referral'}) RETURN u.id, u.mobile, u.name, u.verified")
+            Users = [
+                {
+                    "id": record["u.id"],
+                    "mobile": record["u.mobile"],
+                    "name": record["u.name"],
+                    "verified": record["u.verified"],
+                }
+                for record in result
+            ]
         return Users
     finally:
         driver.close()
 
-@app.get("/Users/customers")
+
+@app.get("/users/customers")
 async def get_existing_customers():
     driver = get_driver()
     try:
         with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'existing_customer'}) RETURN u.mobile, u.name, u.verified")
-            Users = [{"mobile": record["u.mobile"], "name": record["u.name"], "verified": record["u.verified"]} for record in result]
+            result = session.run("MATCH (u:User {referral_type: 'existing_customer'}) RETURN u.id, u.mobile, u.name, u.verified")
+            Users = [
+                {
+                    "id": record["u.id"],
+                    "mobile": record["u.mobile"],
+                    "name": record["u.name"],
+                    "verified": record["u.verified"],
+                }
+                for record in result
+            ]
         return Users
     finally:
         driver.close()
