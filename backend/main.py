@@ -199,10 +199,6 @@ async def update_user(mobile: str, user_update: UserUpdate):
                 set_clauses.append("u.address = $address")
                 params["address"] = user_update.address
             
-            if user_update.phone is not None:
-                set_clauses.append("u.phone = $phone")
-                params["phone"] = user_update.phone
-            
             if user_update.city is not None:
                 set_clauses.append("u.city = $city")
                 params["city"] = user_update.city
@@ -215,17 +211,6 @@ async def update_user(mobile: str, user_update: UserUpdate):
                 set_clauses.append("u.pincode = $pincode")
                 params["pincode"] = user_update.pincode
             
-            if user_update.occupation is not None:
-                set_clauses.append("u.occupation = $occupation")
-                params["occupation"] = user_update.occupation
-            
-            if user_update.income_level is not None:
-                set_clauses.append("u.income_level = $income_level")
-                params["income_level"] = user_update.income_level
-            
-            if user_update.family_size is not None:
-                set_clauses.append("u.family_size = $family_size")
-                params["family_size"] = user_update.family_size
             
             # Handle custom dynamic fields
             if user_update.custom_fields:
