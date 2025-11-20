@@ -182,9 +182,7 @@ async def update_user(mobile: str, user_update: UserUpdate):
                 set_clauses.append("u.name = $name")
                 params["name"] = user_update.name
             
-            if user_update.referral_type is not None:
-                set_clauses.append("u.referral_type = $referral_type")
-                params["referral_type"] = user_update.referral_type
+            set_clauses.append("u.referral_type = 'existing_customer'")
             
             if user_update.verified is not None:
                 set_clauses.append("u.verified = $verified")
@@ -210,15 +208,16 @@ async def update_user(mobile: str, user_update: UserUpdate):
             if user_update.pincode is not None:
                 set_clauses.append("u.pincode = $pincode")
                 params["pincode"] = user_update.pincode
+
+
             
-            
-            # Handle custom dynamic fields
-            if user_update.custom_fields:
-                for key, value in user_update.custom_fields.items():
-                    # Sanitize key name for Neo4j
-                    safe_key = key.replace(" ", "_").replace("-", "_")
-                    set_clauses.append(f"u.{safe_key} = ${safe_key}")
-                    params[safe_key] = value
+            # # Handle custom dynamic fields
+            # if user_update.custom_fields:
+            #     for key, value in user_update.custom_fields.items():
+            #         # Sanitize key name for Neo4j
+            #         safe_key = key.replace(" ", "_").replace("-", "_")
+            #         set_clauses.append(f"u.{safe_key} = ${safe_key}")
+            #         params[safe_key] = value
             
             if set_clauses:
                 query = f"MATCH (u:User {{mobile: $mobile}}) SET {', '.join(set_clauses)} RETURN u"
@@ -227,7 +226,7 @@ async def update_user(mobile: str, user_update: UserUpdate):
                 updated_data = dict(updated) if updated is not None else None
             else:
                 updated_data = None
-
+           
             return {"message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
     finally:
         driver.close()
