@@ -97,12 +97,16 @@ class UserUpdate(BaseModel):
     referral_type: Optional[str] = None
     verified: Optional[bool] = None
     email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    gender: Optional[str] = None
+    occupation: Optional[str] = None
+    date_of_birth: Optional[str] = None
     address: Optional[str] = None
-    phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    addhar_number: Optional[str] = None
     pincode: Optional[str] = None
-    occupation: Optional[str] = None
     income_level: Optional[str] = None
     family_size: Optional[int] = None
     custom_fields: Optional[Dict[str, Any]] = None
@@ -247,54 +251,47 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             set_clauses = []
             params = {"id": user_id}
 
+
+            # Standard fields
             if user_update.name is not None:
                 set_clauses.append("u.name = $name")
                 params["name"] = user_update.name
-
-            if user_update.referral_type is not None:
-                set_clauses.append("u.referral_type = $referral_type")
-                params["referral_type"] = user_update.referral_type
-
-            if user_update.verified is not None:
-                set_clauses.append("u.verified = $verified")
-                params["verified"] = user_update.verified
-
             if user_update.email is not None:
                 set_clauses.append("u.email = $email")
                 params["email"] = user_update.email
-
-            if user_update.address is not None:
-                set_clauses.append("u.address = $address")
-                params["address"] = user_update.address
-
-            if user_update.phone is not None:
-                set_clauses.append("u.phone = $phone")
-                params["phone"] = user_update.phone
-
-            if user_update.city is not None:
-                set_clauses.append("u.city = $city")
-                params["city"] = user_update.city
-
-            if user_update.state is not None:
-                set_clauses.append("u.state = $state")
-                params["state"] = user_update.state
-
-            if user_update.pincode is not None:
-                set_clauses.append("u.pincode = $pincode")
-                params["pincode"] = user_update.pincode
-
+                set_clauses.append("u.verified = true")
+                set_clauses.append("u.isFormFilled = true")
+            if user_update.first_name is not None:
+                set_clauses.append("u.first_name = $first_name")
+                params["first_name"] = user_update.first_name
+            if user_update.last_name is not None:
+                set_clauses.append("u.last_name = $last_name")
+                params["last_name"] = user_update.last_name
+            if user_update.gender is not None:
+                set_clauses.append("u.gender = $gender")
+                params["gender"] = user_update.gender
             if user_update.occupation is not None:
                 set_clauses.append("u.occupation = $occupation")
                 params["occupation"] = user_update.occupation
-
-            if user_update.income_level is not None:
-                set_clauses.append("u.income_level = $income_level")
-                params["income_level"] = user_update.income_level
-
-            if user_update.family_size is not None:
-                set_clauses.append("u.family_size = $family_size")
-                params["family_size"] = user_update.family_size
-
+            if user_update.date_of_birth is not None:
+                set_clauses.append("u.date_of_birth = $date_of_birth")
+                params["date_of_birth"] = user_update.date_of_birth
+            if user_update.address is not None:
+                set_clauses.append("u.address = $address")
+                params["address"] = user_update.address
+            if user_update.city is not None:
+                set_clauses.append("u.city = $city")
+                params["city"] = user_update.city
+            if user_update.state is not None:
+                set_clauses.append("u.state = $state")
+                params["state"] = user_update.state
+            if user_update.addhar_number is not None:
+                set_clauses.append("u.addhar_number = $addhar_number")
+                params["addhar_number"] = user_update.addhar_number
+            if user_update.pincode is not None:
+                set_clauses.append("u.pincode = $pincode")
+                params["pincode"] = user_update.pincode
+            # Custom fields
             if user_update.custom_fields:
                 for key, value in user_update.custom_fields.items():
                     safe_key = key.replace(" ", "_").replace("-", "_")
@@ -318,7 +315,7 @@ async def get_new_referrals():
     driver = get_driver()
     try:
         with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'new_referral'}) RETURN u.id, u.mobile, u.name, u.verified")
+            result = session.run("MATCH (u:User {verified: false}) RETURN u.id, u.mobile, u.name, u.verified")
             Users = [
                 {
                     "id": record["u.id"],
@@ -338,16 +335,8 @@ async def get_existing_customers():
     driver = get_driver()
     try:
         with driver.session() as session:
-            result = session.run("MATCH (u:User {referral_type: 'existing_customer'}) RETURN u.id, u.mobile, u.name, u.verified")
-            Users = [
-                {
-                    "id": record["u.id"],
-                    "mobile": record["u.mobile"],
-                    "name": record["u.name"],
-                    "verified": record["u.verified"],
-                }
-                for record in result
-            ]
+            result = session.run("MATCH (u:User {verified:true}) RETURN u")
+            Users = [dict(record["u"]) for record in result]
         return Users
     finally:
         driver.close()
@@ -412,6 +401,8 @@ async def verify_user(user: UserVerify):
                 mobile=user.mobile
             )
             record = result.single()
+            if not record:
+                return {"statuscode":300,"status": "error", "message": "User not found"}
             if record["verified"]:
                 return {"statuscode":200,"status": "success", "message": "User is already verified", "user": record["user_props"]}
             elif record and record["type"] == "new_referral":
@@ -419,12 +410,13 @@ async def verify_user(user: UserVerify):
                 otp = str(random.randint(100000, 999999))
                 # Update with device info and verified
                 session.run(
-                    "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model, u.verified = true",
+                    "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model",
                     mobile=user.mobile, device_id=user.device_id, device_model=user.device_model
                 )
-                return {"statuscode":200,"status": "success", "otp": otp, "message": "User verified and device info stored"}
+                return {"statuscode":200,"status": "success", "otp": otp,"message":"new user","user": record["user_props"]}
             else:
                 return {"statuscode":300,"status": "error", "message": "User not found, not a new referral"}
+    
     finally:
         driver.close()
 
