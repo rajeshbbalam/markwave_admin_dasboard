@@ -389,6 +389,36 @@ async def get_user_details_by_id(user_id: str):
         driver.close()
 
 
+@app.get("/products/{product_id}")
+async def get_product_details(product_id: str):
+    """Return product details for a given product id. Currently returns a static sample for Murrah buffalo.
+    The `product_id` path parameter is returned in the payload's `id` field.
+    """
+    # Static product sample — replace with DB lookup if needed later
+    product = {
+        "id": product_id if product_id else "MURRAH-001",
+        "breed": "Murrah Buffalo",
+        "age": 3,
+        "milkYield": 12,
+        "price": 175000,
+        "inStock": True,
+        "insurance": 13000,
+        "buffalo_images": [
+            "https://storage.googleapis.com/markwave-kart/img1.jpeg",
+            "https://storage.googleapis.com/markwave-kart/img2.jpeg",
+            "https://storage.googleapis.com/markwave-kart/img3.jpeg",
+            "https://storage.googleapis.com/markwave-kart/img4.jpeg",
+        ],
+        "description": (
+            "The Murrah is a premium dairy buffalo known for its jet-black coat, strong build, "
+            "and curved horns. It is famous for high milk yield, rich fat content, and excellent "
+            "adaptability to different climates."
+        ),
+    }
+
+    return product
+
+
 
 @app.post("/users/verify")
 async def verify_user(user: UserVerify):
