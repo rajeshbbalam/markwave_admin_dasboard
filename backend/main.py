@@ -297,6 +297,15 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             if user_update.pincode is not None:
                 set_clauses.append("u.pincode = $pincode")
                 params["pincode"] = user_update.pincode
+            if user_update.aadhar_front_image_url is not None:
+                set_clauses.append("u.aadhar_front_image_url = $aadhar_front_image_url")
+                params["aadhar_front_image_url"] = user_update.aadhar_front_image_url
+            if user_update.aadhar_back_image_url is not None:
+                set_clauses.append("u.aadhar_back_image_url = $aadhar_back_image_url")
+                params["aadhar_back_image_url"] = user_update.aadhar_back_image_url
+            if user_update.verified is not None:
+                set_clauses.append("u.verified = $verified")
+                params["verified"] = user_update.verified
             # Custom fields
             if user_update.custom_fields:
                 for key, value in user_update.custom_fields.items():
