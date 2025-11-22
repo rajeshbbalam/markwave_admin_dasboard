@@ -106,10 +106,12 @@ class UserUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    aadhaar: Optional[str] = None
+    aadhar_number: Optional[int] = None
     pincode: Optional[str] = None
     income_level: Optional[str] = None
     family_size: Optional[int] = None
+    aadhar_front_image_url: Optional[str] = None
+    aadhar_back_image_url: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
 
 class UserVerify(BaseModel):
@@ -291,9 +293,9 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             if user_update.state is not None:
                 set_clauses.append("u.state = $state")
                 params["state"] = user_update.state
-            if user_update.aadhaar is not None:
-                set_clauses.append("u.aadhaar = $aadhaar")
-                params["aadhaar"] = user_update.aadhaar
+            if user_update.aadhar_number is not None:
+                set_clauses.append("u.aadhar_number = $aadhar_number")
+                params["aadhar_number"] = user_update.aadhar_number
             if user_update.pincode is not None:
                 set_clauses.append("u.pincode = $pincode")
                 params["pincode"] = user_update.pincode
@@ -476,7 +478,15 @@ async def verify_user(user: UserVerify):
             if not record:
                 return {"statuscode":300,"status": "error", "message": "User not found"}
             if record["verified"]:
-                return {"statuscode":200,"status": "success", "message": "User is already verified", "user": record["user_props"]}
+                user_props = dict(record["user_props"])
+                # Convert dob to dd-mm-yyyy string if present
+                if 'dob' in user_props:
+                    dob = user_props['dob']
+                    if isinstance(dob, datetime.date):
+                        user_props['dob'] = dob.strftime('%d-%m-%Y')
+                    elif isinstance(dob, Date):
+                        user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                return {"statuscode":200,"status": "success", "message": "User is already verified", "user": user_props}
             elif record and record["type"] == "new_referral":
                 # Generate OTP
                 otp = str(random.randint(100000, 999999))
@@ -485,7 +495,15 @@ async def verify_user(user: UserVerify):
                     "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model",
                     mobile=user.mobile, device_id=user.device_id, device_model=user.device_model
                 )
-                return {"statuscode":200,"status": "success", "otp": otp,"message":"new user","user": record["user_props"]}
+                user_props = dict(record["user_props"])
+                # Convert dob to dd-mm-yyyy string if present
+                if 'dob' in user_props:
+                    dob = user_props['dob']
+                    if isinstance(dob, datetime.date):
+                        user_props['dob'] = dob.strftime('%d-%m-%Y')
+                    elif isinstance(dob, Date):
+                        user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                return {"statuscode":200,"status": "success", "otp": otp,"message":"new user","user": user_props}
             else:
                 return {"statuscode":300,"status": "error", "message": "User not found, not a new referral"}
     
