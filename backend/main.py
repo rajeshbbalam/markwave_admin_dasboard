@@ -402,6 +402,13 @@ async def get_user_details_by_id(user_id: str):
 
             user_node = user_record["u"]
             user_data = dict(user_node)
+            # Convert dob to dd-mm-yyyy string if present
+            if 'dob' in user_data:
+                dob = user_data['dob']
+                if isinstance(dob, datetime.date):
+                    user_data['dob'] = dob.strftime('%d-%m-%Y')
+                elif isinstance(dob, Date):
+                    user_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
 
             return user_data
     except HTTPException:
