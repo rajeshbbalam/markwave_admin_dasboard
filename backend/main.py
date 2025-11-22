@@ -364,7 +364,7 @@ async def get_user_details(mobile: str):
     finally:
         driver.close()
 
-
+#
 @app.get("/users/id/{user_id}")
 async def get_user_details_by_id(user_id: str):
     """Fetch full user details using generated unique id instead of mobile."""
