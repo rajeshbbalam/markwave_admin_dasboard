@@ -1,0 +1,57 @@
+[
+  {
+    "id": "MURRAH-001",
+    "breed": "Murrah Buffalo",
+    "age": 3,
+    "milkYield": 12,
+    "price": 175000,
+    "inStock": true,
+    "insurance": 13000,
+    "buffalo_images": [
+      "https://storage.googleapis.com/markwave-kart/productimages/murrah_1.jpeg",
+      "https://storage.googleapis.com/markwave-kart/productimages/murrah_2.jpeg",
+      "https://storage.googleapis.com/markwave-kart/productimages/murrah_3.jpeg",
+      "https://storage.googleapis.com/markwave-kart/productimages/murrah_4.jpeg"
+    ],
+    "description": "The Murrah is a premium dairy buffalo known for its jet-black coat, strong build, and curved horns. It is famous for high milk yield, rich fat content, and excellent adaptability to different climates."
+  },
+  {
+    "id": "JAFF-001",
+    "breed": "Jaffarabadi Buffalo",
+    "age": 3,
+    "milkYield": 10,
+    "price": 175000,
+    "inStock": false,
+    "insurance": 13000,
+    "buffalo_images": [
+      "https://storage.googleapis.com/markwave-kart/productimages/jafarbadi.jpeg"
+    ],
+    "description": "The Jaffarabadi is one of the heaviest and strongest buffalo breeds. It offers good milk production and is valued for its robust health."
+  },
+  {
+    "id": "SURTI-001",
+    "breed": "Surti Buffalo",
+    "age": 3,
+    "milkYield": 8,
+    "price": 120000,
+    "inStock": false,
+    "insurance": 13000,
+    "buffalo_images": [
+      "https://storage.googleapis.com/markwave-kart/productimages/surti.jpeg"
+    ],
+    "description": "Surti buffaloes are medium-sized with sickle-shaped horns and are known for moderate milk yield and high-fat content."
+  },
+  {
+    "id": "BHAD-001",
+    "breed": "Bhadawari Buffalo",
+    "age": 3,
+    "milkYield": 7,
+    "price": 100000,
+    "inStock": false,
+    "insurance": 13000,
+    "buffalo_images": [
+      "https://storage.googleapis.com/markwave-kart/productimages/bhadwari.jpeg"
+    ],
+    "description": "Bhadawari buffaloes are hardy animals with high-fat milk and good heat tolerance."
+  }
+]

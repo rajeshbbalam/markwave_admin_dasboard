@@ -419,6 +419,18 @@ async def get_product_details(product_id: str):
     return product
 
 
+@app.get("/products")
+async def get_products():
+    """Return all buffalo products stored in Neo4j as PRODUCT:BUFFALO nodes."""
+    driver = get_driver()
+    try:
+        with driver.session() as session:
+            result = session.run("MATCH (p:PRODUCT:BUFFALO) RETURN p")
+            products = [dict(record["p"]) for record in result]
+        return products
+    finally:
+        driver.close()
+
 
 @app.post("/users/verify")
 async def verify_user(user: UserVerify):
