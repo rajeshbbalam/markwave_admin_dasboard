@@ -461,7 +461,7 @@ async def verify_user(user: UserVerify):
     
     finally:
         driver.close()
-
+#undo commit
 @app.post("/purchases/")
 async def create_purchase(purchase: Purchase):
     driver = get_driver()
