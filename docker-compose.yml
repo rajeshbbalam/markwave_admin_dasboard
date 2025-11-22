@@ -6,9 +6,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
-      - PORT=8080
+      - PORT=8000
       # Add other environment variables from your .env file here
     volumes:
       - ./backend:/app

@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 
 # Expose port (Cloud Run will set PORT env var)
-EXPOSE 8080
+EXPOSE 8000
 
 # Use uvicorn (ASGI) for FastAPI
 CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
