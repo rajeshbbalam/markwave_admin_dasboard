@@ -8,7 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from neo4j import GraphDatabase
 from pydantic import BaseModel
-
+import datetime
+from neo4j.time import Date
 
 # Load environment variables from backend/.env
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -274,8 +275,13 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
                 set_clauses.append("u.occupation = $occupation")
                 params["occupation"] = user_update.occupation
             if user_update.dob is not None:
-                set_clauses.append("u.dob = $dob")
-                params["dob"] = user_update.dob
+                try:
+                    dob_date = datetime.datetime.strptime(user_update.dob, '%m-%d-%Y').date()
+                    set_clauses.append("u.dob = $dob")
+                    params["dob"] = dob_date
+                except ValueError:
+                    # Invalid date format, skip or handle
+                    pass
             if user_update.address is not None:
                 set_clauses.append("u.address = $address")
                 params["address"] = user_update.address
@@ -304,6 +310,13 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
                 record = result.single()
                 updated = record["u"] if record else None
                 updated_data = dict(updated) if updated is not None else None
+                # Convert dob to dd-mm-yyyy string if present
+                if updated_data and 'dob' in updated_data:
+                   dob = updated_data['dob']
+                   if isinstance(dob, datetime.date):
+                        updated_data['dob'] = dob.strftime('%d-%m-%Y')
+                   elif isinstance(dob, Date):
+                        updated_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
             else:
                 updated_data = None
 
