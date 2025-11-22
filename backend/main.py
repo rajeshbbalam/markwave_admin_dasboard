@@ -79,19 +79,82 @@ async def health_check():
 URI = os.getenv("NEO4J_URI")
 AUTH = ("neo4j", os.getenv("NEO4J_PASSWORD"))
 
+def build_update_clauses(user_update: UserUpdate) -> tuple[list, dict]:
+    set_clauses = []
+    params = {}
+
+    # Standard fields
+    if user_update.name is not None:
+        set_clauses.append("u.name = $name")
+        params["name"] = user_update.name
+    if user_update.email is not None:
+        set_clauses.append("u.email = $email")
+        params["email"] = user_update.email
+        set_clauses.append("u.verified = true")
+        set_clauses.append("u.isFormFilled = true")
+    if user_update.first_name is not None:
+        set_clauses.append("u.first_name = $first_name")
+        params["first_name"] = user_update.first_name
+    if user_update.last_name is not None:
+        set_clauses.append("u.last_name = $last_name")
+        params["last_name"] = user_update.last_name
+    if user_update.gender is not None:
+        set_clauses.append("u.gender = $gender")
+        params["gender"] = user_update.gender
+    if user_update.occupation is not None:
+        set_clauses.append("u.occupation = $occupation")
+        params["occupation"] = user_update.occupation
+    if user_update.dob is not None:
+        try:
+            dob_date = datetime.datetime.strptime(user_update.dob, '%m-%d-%Y').date()
+            set_clauses.append("u.dob = $dob")
+            params["dob"] = dob_date
+        except ValueError:
+            # Invalid date format, skip or handle
+            pass
+    if user_update.address is not None:
+        set_clauses.append("u.address = $address")
+        params["address"] = user_update.address
+    if user_update.city is not None:
+        set_clauses.append("u.city = $city")
+        params["city"] = user_update.city
+    if user_update.state is not None:
+        set_clauses.append("u.state = $state")
+        params["state"] = user_update.state
+    if user_update.aadhar_number is not None:
+        set_clauses.append("u.aadhar_number = $aadhar_number")
+        params["aadhar_number"] = user_update.aadhar_number
+    if user_update.pincode is not None:
+        set_clauses.append("u.pincode = $pincode")
+        params["pincode"] = user_update.pincode
+    if user_update.aadhar_front_image_url is not None:
+        set_clauses.append("u.aadhar_front_image_url = $aadhar_front_image_url")
+        params["aadhar_front_image_url"] = user_update.aadhar_front_image_url
+    if user_update.aadhar_back_image_url is not None:
+        set_clauses.append("u.aadhar_back_image_url = $aadhar_back_image_url")
+        params["aadhar_back_image_url"] = user_update.aadhar_back_image_url
+    if user_update.verified is not None:
+        set_clauses.append("u.verified = $verified")
+        params["verified"] = user_update.verified
+    # Custom fields
+    if user_update.custom_fields:
+        for key, value in user_update.custom_fields.items():
+            safe_key = key.replace(" ", "_").replace("-", "_")
+            set_clauses.append(f"u.{safe_key} = ${safe_key}")
+            params[safe_key] = value
+
+    return set_clauses, params
+
 def get_driver():
     return GraphDatabase.driver(URI, auth=AUTH)
 
-@app.on_event("shutdown")
-def close_driver():
-    # Note: Since driver is created per request, we don't close globally
-    pass
 
 class UserCreate(BaseModel):
     mobile: str
-    name: str
-    referral_type: str  # 'new_referral' or 'existing_customer'
-    verified: bool = False
+    first_name: str
+    last_name: str
+    refered_by_mobile: str  
+    refered_by_name: Optional[str] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -127,298 +190,212 @@ class Purchase(BaseModel):
 
 @app.post("/users/")
 async def create_User(User: UserCreate):
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            # Check if user already exists
-            existing = session.run(
-                "MATCH (u:User {mobile: $mobile}) RETURN u",
-                mobile=User.mobile
-            ).single()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                # Check if user already exists
+                existing = session.run(
+                    "MATCH (u:User {mobile: $mobile}) RETURN u",
+                    mobile=User.mobile
+                ).single()
 
-            if existing:
-                existing_props = dict(existing["u"])
+                if existing:
+                    existing_props = dict(existing["u"])
+                    return {
+                        "statuscode": 200,
+                        "status": "success",
+                        "message": "User already exists",
+                        "user": existing_props
+                    }
+
+                # Create or update user, assigning a stable unique id on first creation
+                result = session.run(
+                    "MERGE (u:User {mobile: $mobile}) "
+                    "ON CREATE SET u.id = randomUUID() "
+                    "SET u.first_name = $first_name,u.last_name = $last_name,u.mobile = $mobile,u.refered_by_mobile = $refered_by_mobile,u.refered_by_name = $refered_by_name "
+                    "RETURN u.id AS id, u.mobile AS mobile, u.first_name AS first_name, u.last_name AS last_name,u.refered_by_mobile AS refered_by_mobile,u.refered_by_name AS refered_by_name",
+                    mobile=User.mobile,
+                    first_name=User.first_name,
+                    last_name=User.last_name,
+                    refered_by_mobile=User.refered_by_mobile,
+                    refered_by_name=User.refered_by_name
+                )
+                record = result.single()
                 return {
-                    "message": "User already exists",
-                    "user": existing_props
+                    "statuscode": 201,
+                    "status": "success",
+                    "message": "User created or updated",
+                    "user": {
+                        "id": record["id"],
+                        "mobile": record["mobile"],
+                        "first_name": record["first_name"],
+                        "last_name": record["last_name"],
+                        "refered_by_mobile": record["refered_by_mobile"],
+                        "refered_by_name": record["refered_by_name"],
+                    },
                 }
-
-            # Create or update user, assigning a stable unique id on first creation
-            result = session.run(
-                "MERGE (u:User {mobile: $mobile}) "
-                "ON CREATE SET u.id = randomUUID() "
-                "SET u.name = $name, u.referral_type = $referral_type, u.verified = $verified "
-                "RETURN u.id AS id, u.mobile AS mobile, u.name AS name, u.referral_type AS referral_type, u.verified AS verified",
-                mobile=User.mobile,
-                name=User.name,
-                referral_type=User.referral_type,
-                verified=User.verified,
-            )
-            record = result.single()
-            return {
-                "message": "User created or updated",
-                "user": {
-                    "id": record["id"],
-                    "mobile": record["mobile"],
-                    "name": record["name"],
-                    "referral_type": record["referral_type"],
-                    "verified": record["verified"],
-                },
-            }
-    finally:
-        driver.close()
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 @app.put("/users/{mobile}")
 async def update_user(mobile: str, user_update: UserUpdate):
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            # Check if user exists
-            result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
-            user = result.single()
-            
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            
-            # Build dynamic SET clause based on provided fields
-            set_clauses = []
-            params = {"mobile": mobile}
-            
-            # Handle standard fields
-            if user_update.name is not None:
-                set_clauses.append("u.name = $name")
-                params["name"] = user_update.name
-            
-            set_clauses.append("u.referral_type = 'existing_customer'")
-            
-            if user_update.verified is not None:
-                set_clauses.append("u.verified = $verified")
-                params["verified"] = user_update.verified
-            
-            # Handle new fields
-            if user_update.email is not None:
-                set_clauses.append("u.email = $email")
-                params["email"] = user_update.email
-            
-            if user_update.address is not None:
-                set_clauses.append("u.address = $address")
-                params["address"] = user_update.address
-            
-            if user_update.city is not None:
-                set_clauses.append("u.city = $city")
-                params["city"] = user_update.city
-            
-            if user_update.state is not None:
-                set_clauses.append("u.state = $state")
-                params["state"] = user_update.state
-            
-            if user_update.pincode is not None:
-                set_clauses.append("u.pincode = $pincode")
-                params["pincode"] = user_update.pincode
-
-
-            
-            # # Handle custom dynamic fields
-            # if user_update.custom_fields:
-            #     for key, value in user_update.custom_fields.items():
-            #         # Sanitize key name for Neo4j
-            #         safe_key = key.replace(" ", "_").replace("-", "_")
-            #         set_clauses.append(f"u.{safe_key} = ${safe_key}")
-            #         params[safe_key] = value
-            
-            if set_clauses:
-                query = f"MATCH (u:User {{mobile: $mobile}}) SET {', '.join(set_clauses)} RETURN u"
-                result = session.run(query, **params)
-                updated = result.single()["u"] if result.single() else None
-                updated_data = dict(updated) if updated is not None else None
-            else:
-                updated_data = None
-           
-            return {"message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
-    finally:
-        driver.close()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                # Check if user exists
+                result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
+                user = result.single()
+                
+                if not user:
+                    return {"statuscode": 404, "status": "error", "message": "User not found"}
+                
+                set_clauses, params = build_update_clauses(user_update)
+                params["mobile"] = mobile
+                
+                if set_clauses:
+                    query = f"MATCH (u:User {{mobile: $mobile}}) SET {', '.join(set_clauses)} RETURN u"
+                    result = session.run(query, **params)
+                    updated = result.single()["u"] if result.single() else None
+                    updated_data = dict(updated) if updated is not None else None
+                else:
+                    updated_data = None
+               
+                return {"statuscode": 200, "status": "success", "message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.put("/users/id/{user_id}")
 async def update_user_by_id(user_id: str, user_update: UserUpdate):
-    """Update user using generated unique id instead of mobile."""
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
-            user = result.single()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+                user = result.single()
 
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
+                if not user:
+                    return {"statuscode": 404, "status": "error", "message": "User not found"}
 
-            set_clauses = []
-            params = {"id": user_id}
+                set_clauses, params = build_update_clauses(user_update)
+                params["id"] = user_id
 
+                if set_clauses:
+                    query = f"MATCH (u:User {{id: $id}}) SET {', '.join(set_clauses)} RETURN u"
+                    result = session.run(query, **params)
+                    record = result.single()
+                    updated = record["u"] if record else None
+                    updated_data = dict(updated) if updated is not None else None
+                    # Convert dob to dd-mm-yyyy string if present
+                    if updated_data and 'dob' in updated_data:
+                       dob = updated_data['dob']
+                       if isinstance(dob, datetime.date):
+                            updated_data['dob'] = dob.strftime('%d-%m-%Y')
+                       elif isinstance(dob, Date):
+                            updated_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                else:
+                    updated_data = None
 
-            # Standard fields
-            if user_update.name is not None:
-                set_clauses.append("u.name = $name")
-                params["name"] = user_update.name
-            if user_update.email is not None:
-                set_clauses.append("u.email = $email")
-                params["email"] = user_update.email
-                set_clauses.append("u.verified = true")
-                set_clauses.append("u.isFormFilled = true")
-            if user_update.first_name is not None:
-                set_clauses.append("u.first_name = $first_name")
-                params["first_name"] = user_update.first_name
-            if user_update.last_name is not None:
-                set_clauses.append("u.last_name = $last_name")
-                params["last_name"] = user_update.last_name
-            if user_update.gender is not None:
-                set_clauses.append("u.gender = $gender")
-                params["gender"] = user_update.gender
-            if user_update.occupation is not None:
-                set_clauses.append("u.occupation = $occupation")
-                params["occupation"] = user_update.occupation
-            if user_update.dob is not None:
-                try:
-                    dob_date = datetime.datetime.strptime(user_update.dob, '%m-%d-%Y').date()
-                    set_clauses.append("u.dob = $dob")
-                    params["dob"] = dob_date
-                except ValueError:
-                    # Invalid date format, skip or handle
-                    pass
-            if user_update.address is not None:
-                set_clauses.append("u.address = $address")
-                params["address"] = user_update.address
-            if user_update.city is not None:
-                set_clauses.append("u.city = $city")
-                params["city"] = user_update.city
-            if user_update.state is not None:
-                set_clauses.append("u.state = $state")
-                params["state"] = user_update.state
-            if user_update.aadhar_number is not None:
-                set_clauses.append("u.aadhar_number = $aadhar_number")
-                params["aadhar_number"] = user_update.aadhar_number
-            if user_update.pincode is not None:
-                set_clauses.append("u.pincode = $pincode")
-                params["pincode"] = user_update.pincode
-            if user_update.aadhar_front_image_url is not None:
-                set_clauses.append("u.aadhar_front_image_url = $aadhar_front_image_url")
-                params["aadhar_front_image_url"] = user_update.aadhar_front_image_url
-            if user_update.aadhar_back_image_url is not None:
-                set_clauses.append("u.aadhar_back_image_url = $aadhar_back_image_url")
-                params["aadhar_back_image_url"] = user_update.aadhar_back_image_url
-            if user_update.verified is not None:
-                set_clauses.append("u.verified = $verified")
-                params["verified"] = user_update.verified
-            # Custom fields
-            if user_update.custom_fields:
-                for key, value in user_update.custom_fields.items():
-                    safe_key = key.replace(" ", "_").replace("-", "_")
-                    set_clauses.append(f"u.{safe_key} = ${safe_key}")
-                    params[safe_key] = value
-
-            if set_clauses:
-                query = f"MATCH (u:User {{id: $id}}) SET {', '.join(set_clauses)} RETURN u"
-                result = session.run(query, **params)
-                record = result.single()
-                updated = record["u"] if record else None
-                updated_data = dict(updated) if updated is not None else None
-                # Convert dob to dd-mm-yyyy string if present
-                if updated_data and 'dob' in updated_data:
-                   dob = updated_data['dob']
-                   if isinstance(dob, datetime.date):
-                        updated_data['dob'] = dob.strftime('%d-%m-%Y')
-                   elif isinstance(dob, Date):
-                        updated_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
-            else:
-                updated_data = None
-
-            return {"message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
-    finally:
-        driver.close()
+                return {"statuscode": 200, "status": "success", "message": "User updated successfully", "updated_fields": len(set_clauses), "user": updated_data}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 @app.get("/users/referrals")
 async def get_new_referrals():
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {verified: false}) RETURN u.id, u.mobile, u.name, u.verified")
-            Users = [
-                {
-                    "id": record["u.id"],
-                    "mobile": record["u.mobile"],
-                    "name": record["u.name"],
-                    "verified": record["u.verified"],
-                }
-                for record in result
-            ]
-        return Users
-    finally:
-        driver.close()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (u:User {verified: false}) RETURN u.id, u.mobile, u.name, u.verified")
+                Users = [
+                    {
+                        "id": record["u.id"],
+                        "mobile": record["u.mobile"],
+                        "name": record["u.name"],
+                        "verified": record["u.verified"],
+                    }
+                    for record in result
+                ]
+            return {"statuscode": 200, "status": "success", "users": Users}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.get("/users/customers")
 async def get_existing_customers():
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {verified:true}) RETURN u")
-            Users = [dict(record["u"]) for record in result]
-        return Users
-    finally:
-        driver.close()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (u:User {verified:true}) RETURN u")
+                Users = [dict(record["u"]) for record in result]
+            return {"statuscode": 200, "status": "success", "users": Users}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.get("/users/{mobile}")
 async def get_user_details(mobile: str):
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
-            user_record = result.single()
-            
-            if not user_record:
-                raise HTTPException(status_code=404, detail="User not found")
-            
-            user_node = user_record["u"]
-            user_data = dict(user_node)
-            
-            return user_data
-    except HTTPException:
-        raise
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (u:User {mobile: $mobile}) RETURN u", mobile=mobile)
+                user_record = result.single()
+                
+                if not user_record:
+                    return {"statuscode": 404, "status": "error", "message": "User not found"}
+                
+                user_node = user_record["u"]
+                user_data = dict(user_node)
+                
+                return {"statuscode": 200, "status": "success", "user": user_data}
+        finally:
+            driver.close()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        driver.close()
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.get("/users/id/{user_id}")
 async def get_user_details_by_id(user_id: str):
     """Fetch full user details using generated unique id instead of mobile."""
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
-            user_record = result.single()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (u:User {id: $id}) RETURN u", id=user_id)
+                user_record = result.single()
 
-            if not user_record:
-                raise HTTPException(status_code=404, detail="User not found")
+                if not user_record:
+                    return {"statuscode": 404, "status": "error", "message": "User not found"}
 
-            user_node = user_record["u"]
-            user_data = dict(user_node)
-            # Convert dob to dd-mm-yyyy string if present
-            if 'dob' in user_data:
-                dob = user_data['dob']
-                if isinstance(dob, datetime.date):
-                    user_data['dob'] = dob.strftime('%d-%m-%Y')
-                elif isinstance(dob, Date):
-                    user_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                user_node = user_record["u"]
+                user_data = dict(user_node)
+                # Convert dob to dd-mm-yyyy string if present
+                if 'dob' in user_data:
+                    dob = user_data['dob']
+                    if isinstance(dob, datetime.date):
+                        user_data['dob'] = dob.strftime('%d-%m-%Y')
+                    elif isinstance(dob, Date):
+                        user_data['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
 
-            return user_data
-    except HTTPException:
-        raise
+                return {"statuscode": 200, "status": "success", "user": user_data}
+        finally:
+            driver.close()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        driver.close()
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.get("/products/{product_id}")
@@ -454,75 +431,83 @@ async def get_product_details(product_id: str):
 @app.get("/products")
 async def get_products():
     """Return all buffalo products stored in Neo4j as PRODUCT:BUFFALO nodes."""
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            result = session.run("MATCH (p:PRODUCT:BUFFALO) RETURN p")
-            products = [dict(record["p"]) for record in result]
-        return products
-    finally:
-        driver.close()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                result = session.run("MATCH (p:PRODUCT:BUFFALO) RETURN p")
+                products = [dict(record["p"]) for record in result]
+            return {"statuscode": 200, "status": "success", "products": products}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 
 @app.post("/users/verify")
 async def verify_user(user: UserVerify):
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            # Check if user exists and is new_referral and not verified
-            result = session.run(
-                "MATCH (u:User {mobile: $mobile}) RETURN u.referral_type AS type, u.verified AS verified, properties(u) AS user_props",
-                mobile=user.mobile
-            )
-            record = result.single()
-            if not record:
-                return {"statuscode":300,"status": "error", "message": "User not found"}
-            if record["verified"]:
-                user_props = dict(record["user_props"])
-                # Convert dob to dd-mm-yyyy string if present
-                if 'dob' in user_props:
-                    dob = user_props['dob']
-                    if isinstance(dob, datetime.date):
-                        user_props['dob'] = dob.strftime('%d-%m-%Y')
-                    elif isinstance(dob, Date):
-                        user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
-                return {"statuscode":200,"status": "success", "message": "User is already verified", "user": user_props}
-            elif record and record["type"] == "new_referral":
-                # Generate OTP
-                otp = str(random.randint(100000, 999999))
-                # Update with device info and verified
-                session.run(
-                    "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model",
-                    mobile=user.mobile, device_id=user.device_id, device_model=user.device_model
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                # Check if user exists and is new_referral and not verified
+                result = session.run(
+                    "MATCH (u:User {mobile: $mobile}) RETURN u.referral_type AS type, u.verified AS verified, properties(u) AS user_props",
+                    mobile=user.mobile
                 )
-                user_props = dict(record["user_props"])
-                # Convert dob to dd-mm-yyyy string if present
-                if 'dob' in user_props:
-                    dob = user_props['dob']
-                    if isinstance(dob, datetime.date):
-                        user_props['dob'] = dob.strftime('%d-%m-%Y')
-                    elif isinstance(dob, Date):
-                        user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
-                return {"statuscode":200,"status": "success", "otp": otp,"message":"new user","user": user_props}
-            else:
-                return {"statuscode":300,"status": "error", "message": "User not found, not a new referral"}
-    
-    finally:
-        driver.close()
+                record = result.single()
+                if not record:
+                    return {"statuscode": 300, "status": "error", "message": "User not found"}
+                if record["verified"]:
+                    user_props = dict(record["user_props"])
+                    # Convert dob to dd-mm-yyyy string if present
+                    if 'dob' in user_props:
+                        dob = user_props['dob']
+                        if isinstance(dob, datetime.date):
+                            user_props['dob'] = dob.strftime('%d-%m-%Y')
+                        elif isinstance(dob, Date):
+                            user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                    return {"statuscode": 200, "status": "success", "message": "User already verified", "user": user_props}
+                elif record and record["type"] == "new_referral":
+                    # Generate OTP
+                    otp = str(random.randint(100000, 999999))
+                    # Update with device info and verified
+                    session.run(
+                        "MATCH (u:User {mobile: $mobile}) SET u.device_id = $device_id, u.device_model = $device_model",
+                        mobile=user.mobile, device_id=user.device_id, device_model=user.device_model
+                    )
+                    user_props = dict(record["user_props"])
+                    # Convert dob to dd-mm-yyyy string if present
+                    if 'dob' in user_props:
+                        dob = user_props['dob']
+                        if isinstance(dob, datetime.date):
+                            user_props['dob'] = dob.strftime('%d-%m-%Y')
+                        elif isinstance(dob, Date):
+                            user_props['dob'] = f"{dob.day:02d}-{dob.month:02d}-{dob.year}"
+                    return {"statuscode": 200, "status": "success", "message": "New user verified", "otp": otp, "user": user_props}
+                else:
+                    return {"statuscode": 300, "status": "error", "message": "User not a new referral"}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 @app.post("/purchases/")
 async def create_purchase(purchase: Purchase):
-    driver = get_driver()
     try:
-        with driver.session() as session:
-            session.run(
-                "MATCH (u:User {mobile: $User_mobile}) "
-                "CREATE (u)-[:PURCHASED {item: $item, details: $details}]->(p:Purchase {id: randomUUID()})",
-                User_mobile=purchase.User_mobile, item=purchase.item, details=purchase.details
-            )
-        return {"message": "Purchase recorded"}
-    finally:
-        driver.close()
+        driver = get_driver()
+        try:
+            with driver.session() as session:
+                session.run(
+                    "MATCH (u:User {mobile: $User_mobile}) "
+                    "CREATE (u)-[:PURCHASED {item: $item, details: $details}]->(p:Purchase {id: randomUUID()})",
+                    User_mobile=purchase.User_mobile, item=purchase.item, details=purchase.details
+                )
+            return {"statuscode": 200, "status": "success", "message": "Purchase recorded"}
+        finally:
+            driver.close()
+    except Exception as e:
+        return {"statuscode": 500, "status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
