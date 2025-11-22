@@ -31,8 +31,6 @@ steps:
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      - '--port'
-      - '8080'
     id: 'deploy-backend'
   
   # Get the backend service URL and update frontend config
@@ -68,8 +66,6 @@ steps:
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      - '--port'
-      - '80'
     id: 'deploy-frontend'
 
 # Store Docker images in Container Registry
