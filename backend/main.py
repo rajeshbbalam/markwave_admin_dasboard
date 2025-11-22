@@ -101,11 +101,11 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     gender: Optional[str] = None
     occupation: Optional[str] = None
-    date_of_birth: Optional[str] = None
+    dob: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    addhar_number: Optional[str] = None
+    aadhaar: Optional[str] = None
     pincode: Optional[str] = None
     income_level: Optional[str] = None
     family_size: Optional[int] = None
@@ -273,9 +273,9 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             if user_update.occupation is not None:
                 set_clauses.append("u.occupation = $occupation")
                 params["occupation"] = user_update.occupation
-            if user_update.date_of_birth is not None:
-                set_clauses.append("u.date_of_birth = $date_of_birth")
-                params["date_of_birth"] = user_update.date_of_birth
+            if user_update.dob is not None:
+                set_clauses.append("u.dob = $dob")
+                params["dob"] = user_update.dob
             if user_update.address is not None:
                 set_clauses.append("u.address = $address")
                 params["address"] = user_update.address
@@ -285,9 +285,9 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             if user_update.state is not None:
                 set_clauses.append("u.state = $state")
                 params["state"] = user_update.state
-            if user_update.addhar_number is not None:
-                set_clauses.append("u.addhar_number = $addhar_number")
-                params["addhar_number"] = user_update.addhar_number
+            if user_update.aadhaar is not None:
+                set_clauses.append("u.aadhaar = $aadhaar")
+                params["aadhaar"] = user_update.aadhaar
             if user_update.pincode is not None:
                 set_clauses.append("u.pincode = $pincode")
                 params["pincode"] = user_update.pincode
@@ -301,7 +301,8 @@ async def update_user_by_id(user_id: str, user_update: UserUpdate):
             if set_clauses:
                 query = f"MATCH (u:User {{id: $id}}) SET {', '.join(set_clauses)} RETURN u"
                 result = session.run(query, **params)
-                updated = result.single()["u"] if result.single() else None
+                record = result.single()
+                updated = record["u"] if record else None
                 updated_data = dict(updated) if updated is not None else None
             else:
                 updated_data = None
@@ -475,3 +476,7 @@ async def create_purchase(purchase: Purchase):
         return {"message": "Purchase recorded"}
     finally:
         driver.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
