@@ -3,10 +3,11 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '-f'
+      - 'backend/Dockerfile'
       - '-t'
       - 'gcr.io/$PROJECT_ID/markwave-backend'
-      - '.'
-    dir: 'backend'
+      - 'backend'
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
