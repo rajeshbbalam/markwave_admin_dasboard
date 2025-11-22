@@ -508,8 +508,3 @@ async def create_purchase(purchase: Purchase):
             driver.close()
     except Exception as e:
         return {"statuscode": 500, "status": "error", "message": str(e)}
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     port = int(os.getenv("PORT", 8000))
-#     uvicorn.run("main:app", host="0.0.0.0", port=port)
